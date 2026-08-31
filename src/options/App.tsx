@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ByokProvider } from '@/shared/types/byok';
-import type { FormflowByokSettingsResponse, FormflowByokTestResponse, FormflowResponse } from '@/shared/messages';
+import type { FormflowByokSettingsResponse, FormflowByokTestResponse, FormflowEntitlementResponse, FormflowResponse } from '@/shared/messages';
+import type { Tier } from '@/shared/types/entitlements';
 import { DEFAULT_OLLAMA_ENDPOINT } from '@/shared/constants/byok-storage';
 
 type Settings = FormflowByokSettingsResponse['settings'];
@@ -12,10 +13,44 @@ export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tier, setTier] = useState<Tier>('FREE');
+  const [simulatePro, setSimulatePro] = useState(false);
 
   useEffect(() => {
     void loadSettings();
+    void loadEntitlement();
   }, []);
+
+  async function loadEntitlement() {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'FORMFLOW_GET_ENTITLEMENT',
+    })) as FormflowResponse;
+    if (response.ok && 'tier' in response) {
+      const ent = response as FormflowEntitlementResponse;
+      setTier(ent.tier);
+      setSimulatePro(ent.tier === 'PRO' || ent.tier === 'TEAM');
+    }
+  }
+
+  async function handleTogglePro(enabled: boolean) {
+    setSimulatePro(enabled);
+    setLoading(true);
+    try {
+      const response = (await chrome.runtime.sendMessage({
+        type: 'FORMFLOW_SET_DEV_PRO_TIER',
+        enabled,
+      })) as FormflowResponse;
+      if (response.ok && 'tier' in response) {
+        setTier(response.tier);
+        setStatus(enabled ? 'Pro tier simulated for development.' : 'Reverted to Free tier.');
+      }
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Could not update tier.');
+      setSimulatePro(!enabled);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadSettings() {
     const response = (await chrome.runtime.sendMessage({
@@ -156,9 +191,26 @@ export function App() {
         </p>
       )}
 
+      <section className="mb-6 rounded border border-slate-200 p-4">
+        <h2 className="mb-2 text-sm font-medium">Developer — Simulate Pro tier</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Unlocks Pro presets (Boundary, Validation Stress, Security Sanity) for local testing
+          before Phase 5 billing ships. Current tier: <strong>{tier}</strong>.
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={simulatePro}
+            onChange={(e) => void handleTogglePro(e.target.checked)}
+            disabled={loading}
+          />
+          Simulate Pro tier
+        </label>
+      </section>
+
       <section className="rounded border border-slate-200 p-4">
         <h2 className="mb-2 text-sm font-medium">License</h2>
-        <p className="text-xs text-slate-500">Free tier — Pro upgrade ships in Phase 5.</p>
+        <p className="text-xs text-slate-500">Billing integration ships in Phase 5.</p>
       </section>
     </div>
   );

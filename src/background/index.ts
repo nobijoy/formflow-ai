@@ -13,6 +13,14 @@ import {
   saveByokSettings,
 } from '@/background/ai-router/settings';
 import { isAiRouterError } from '@/background/ai-router/errors';
+import { assertFillAllowed, isFillGateError } from '@/background/fill-gate';
+import {
+  authorizeSecurityDomain,
+} from '@/background/security/domain-authorization';
+import {
+  getCachedEntitlement,
+  setDevProTier,
+} from '@/background/licensing/index';
 
 const SW_STATUS_KEY = 'formflow.serviceWorker.startedAt';
 
@@ -31,11 +39,15 @@ function errorResponse(err: unknown): FormflowErrorResponse {
   if (isAiRouterError(err)) {
     return { ok: false, error: err.message, code: err.code };
   }
+  if (isFillGateError(err)) {
+    return { ok: false, error: err.message, code: err.code, hostname: err.hostname };
+  }
   return {
     ok: false,
     error: err instanceof Error ? err.message : 'Unexpected error.',
   };
 }
+
 async function getActiveTabId(): Promise<number> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error('No active tab found.');
@@ -72,6 +84,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void chrome.storage.local.get(SW_STATUS_KEY).then((stored) => {
       respond({ ok: true, startedAt: stored[SW_STATUS_KEY] ?? Date.now() });
     });
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_ENTITLEMENT') {
+    void getCachedEntitlement().then((state) => {
+      respond({ ok: true, tier: state.tier, features: state.features });
+    });
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_SET_DEV_PRO_TIER') {
+    void setDevProTier(message.enabled)
+      .then(async () => {
+        const state = await getCachedEntitlement();
+        respond({ ok: true, tier: state.tier, features: state.features });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_AUTHORIZE_SECURITY_DOMAIN') {
+    void authorizeSecurityDomain(message.hostname)
+      .then(() => respond({ ok: true, authorized: true }))
+      .catch((err) => respond(errorResponse(err)));
     return true;
   }
 
@@ -125,14 +161,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'FORMFLOW_FILL_FORM') {
-    void sendToActiveTab<FormflowFillResponse>(message)
+    void assertFillAllowed(message.presetMode)
+      .then(() => sendToActiveTab<FormflowFillResponse>(message))
       .then((result) => {
         if (result?.ok) respond(result);
         else respond({ ok: false, error: 'Fill request failed.' });
       })
-      .catch((err: Error) => {
-        respond({ ok: false, error: err.message });
-      });
+      .catch((err) => respond(errorResponse(err)));
     return true;
   }
 });

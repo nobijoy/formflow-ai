@@ -38,6 +38,7 @@ export function extractFieldContext(el: Element): FieldContext {
     name: input.name || undefined,
     placeholder: input.placeholder || undefined,
     label: getAccessibleLabel(el),
+    required: 'required' in input ? Boolean(input.required) : undefined,
   };
 }
 

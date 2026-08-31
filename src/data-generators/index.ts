@@ -7,3 +7,4 @@ export * from './happy-path';
 export * from './boundary-overflow';
 export * from './validation-stress';
 export * from './security-sanity';
+export * from './preset-resolver';

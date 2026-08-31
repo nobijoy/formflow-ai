@@ -1,11 +1,9 @@
 /**
- * Phase 1–2 fill orchestration.
- *
- * FR-3.1: static heuristics run first (<5 ms, no network). Only heuristic
- * misses call the background AI router (FR-3.3 BYOK).
+ * Phase 3 fill orchestration — all four presets + Happy-Path AI fallback.
  */
 
 import { generateHappyPathValue } from '@/data-generators/happy-path';
+import { resolvePresetValue } from '@/data-generators/preset-resolver';
 import { runFillPassAsync } from '@/content/dom-inspector';
 import type { InspectionReport } from '@/shared/types/fill-report';
 import {
@@ -16,6 +14,13 @@ import {
 } from '@/content/field-context';
 import type { PresetMode } from '@/shared/schema/action-ledger';
 import type { FormflowResolveFieldResponse, FormflowResponse } from '@/shared/messages';
+
+function readMaxLength(el: Element): number | null {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    return el.maxLength > 0 ? el.maxLength : null;
+  }
+  return null;
+}
 
 async function resolveViaAi(snippet: string): Promise<string | null> {
   const response = (await chrome.runtime.sendMessage({
@@ -34,17 +39,27 @@ async function resolveViaAi(snippet: string): Promise<string | null> {
 }
 
 export async function fillFormWithPreset(presetMode: PresetMode): Promise<InspectionReport> {
-  if (presetMode !== 'HAPPY_PATH') {
-    throw new Error(`Preset "${presetMode}" is not available until Phase 3.`);
-  }
-
   let heuristicResolvedCount = 0;
   let aiResolvedCount = 0;
+  let fieldIndex = 0;
 
   const report = await runFillPassAsync(async (el) => {
     if (!isFillableInput(el)) return null;
 
     const context = extractFieldContext(el);
+    const presetValue = resolvePresetValue(presetMode, {
+      context,
+      maxLength: readMaxLength(el),
+      fieldIndex,
+    });
+    fieldIndex += 1;
+
+    if (presetValue !== null) {
+      heuristicResolvedCount += 1;
+      return { value: presetValue, presetMode };
+    }
+
+    // Happy-Path: regex heuristics first, then BYOK AI, then generic fallback.
     const heuristic = generateHappyPathValue(context);
     if (heuristic) {
       heuristicResolvedCount += 1;

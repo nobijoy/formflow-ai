@@ -46,3 +46,24 @@ export async function hasFeature(feature: FeatureFlag): Promise<boolean> {
   const state = await getCachedEntitlement();
   return state.features.includes(feature);
 }
+
+/** Dev-only helper until Phase 5 billing — toggles Pro tier in local storage. */
+export async function setDevProTier(enabled: boolean): Promise<void> {
+  const now = Date.now();
+  if (enabled) {
+    await setCachedEntitlement({
+      tier: 'PRO',
+      features: TIER_FEATURES.PRO,
+      lastVerifiedAt: now,
+      gracePeriodMs: ENTITLEMENT_GRACE_PERIOD_MS,
+    });
+    return;
+  }
+
+  await setCachedEntitlement({
+    tier: 'FREE',
+    features: TIER_FEATURES.FREE,
+    lastVerifiedAt: now,
+    gracePeriodMs: ENTITLEMENT_GRACE_PERIOD_MS,
+  });
+}

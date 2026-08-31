@@ -12,6 +12,7 @@ export interface FieldContext {
   label?: string;
   placeholder?: string;
   name?: string;
+  required?: boolean;
 }
 
 const HEURISTICS: Array<{ pattern: RegExp; generate: () => string }> = [
