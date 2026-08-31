@@ -1,33 +1,15 @@
 /**
  * Module 1 — DOM Inspection orchestration.
- *
- * Ties together shadow-dom traversal, locator resolution, and value
- * injection into the single entry point the popup calls (via the service
- * worker → chrome.scripting message) to run a fill pass.
  */
 
 import { findFillableElements } from '@/content/shadow-dom';
 import { resolveLocator } from '@/content/locator-resolver';
-import { setNativeValue } from '@/content/setter-interceptor';
-import { dispatchFillEvents } from '@/content/event-dispatcher';
-import type { PresetMode, TargetLocator } from '@/shared/schema/action-ledger';
+import { injectValue } from '@/content/inject-value';
+import type { PresetMode } from '@/shared/schema/action-ledger';
+import type { FillPlanEntry, InspectionReport } from '@/shared/types/fill-report';
 
-export interface FillPlanEntry {
-  target: TargetLocator;
-  value: string;
-  presetMode: PresetMode;
-}
+export type { FillPlanEntry, InspectionReport } from '@/shared/types/fill-report';
 
-export interface InspectionReport {
-  filled: FillPlanEntry[];
-  unreachableCount: number;
-}
-
-/**
- * Runs one fill pass over the current document using `valueForElement` to
- * decide what to put in each field (delegated to Module 2's preset engine —
- * kept out of this file so DOM mechanics and data generation stay decoupled).
- */
 export function runFillPass(
   valueForElement: (el: Element) => { value: string; presetMode: PresetMode } | null,
 ): InspectionReport {
@@ -39,9 +21,7 @@ export function runFillPass(
     const decision = valueForElement(el);
     if (!decision) continue;
 
-    setNativeValue(el as HTMLInputElement, decision.value);
-    dispatchFillEvents(el);
-
+    injectValue(el as HTMLInputElement, decision.value);
     filled.push({
       target: resolveLocator(el),
       value: decision.value,
@@ -49,5 +29,34 @@ export function runFillPass(
     });
   }
 
-  return { filled, unreachableCount: unreachableHosts.length };
+  return emptyReport(filled, unreachableHosts.length);
+}
+
+/** Phase 2 — async value resolver for BYOK AI calls between fields. */
+export async function runFillPassAsync(
+  valueForElement: (
+    el: Element,
+  ) => Promise<{ value: string; presetMode: PresetMode } | null>,
+): Promise<InspectionReport> {
+  const { reachableInputs, unreachableHosts } = findFillableElements(document);
+  const filled: FillPlanEntry[] = [];
+
+  for (const el of reachableInputs) {
+    if (!(el instanceof HTMLElement)) continue;
+    const decision = await valueForElement(el);
+    if (!decision) continue;
+
+    injectValue(el as HTMLInputElement, decision.value);
+    filled.push({
+      target: resolveLocator(el),
+      value: decision.value,
+      presetMode: decision.presetMode,
+    });
+  }
+
+  return emptyReport(filled, unreachableHosts.length);
+}
+
+function emptyReport(filled: FillPlanEntry[], unreachableCount: number): InspectionReport {
+  return { filled, unreachableCount, heuristicResolvedCount: 0, aiResolvedCount: 0 };
 }

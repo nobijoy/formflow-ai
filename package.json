@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "fixtures": "npx --yes serve tests/fixtures -p 3333"
   },
   "dependencies": {
     "react": "^18.3.1",

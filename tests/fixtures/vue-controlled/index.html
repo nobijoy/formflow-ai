@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fixture — Vue Controlled Input</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 2rem auto; }
+      label { display: block; margin-top: 1rem; font-weight: 600; }
+      input { width: 100%; padding: 0.5rem; margin-top: 0.25rem; }
+      .state { margin-top: 1.5rem; padding: 1rem; background: #f1f5f9; border-radius: 0.5rem; }
+      .pass { color: #15803d; font-weight: 600; }
+      .fail { color: #b91c1c; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Vue v-model Controlled Input</h1>
+    <p>Phase 1 exit criteria: after Fill Form, <strong>Vue model</strong> (below) must match the visible input.</p>
+    <div id="app">
+      <form @submit.prevent>
+        <label for="email">Email Address</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          data-testid="user-email-input"
+          v-model="email"
+        />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          data-testid="user-password-input"
+          v-model="password"
+        />
+
+        <div class="state">
+          <div>Vue model — email: <code>{{ email || '(empty)' }}</code></div>
+          <div>DOM value — email: <code>{{ domEmail || '(empty)' }}</code></div>
+          <div :class="synced && email ? 'pass' : 'fail'">
+            {{ synced && email ? 'PASS — framework state synced' : 'FAIL — state not synced yet' }}
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      const { createApp, computed } = Vue;
+
+      createApp({
+        data() {
+          return { email: '', password: '' };
+        },
+        computed: {
+          domEmail() {
+            return document.getElementById('email')?.value ?? '';
+          },
+          synced() {
+            return this.email === this.domEmail;
+          },
+        },
+      }).mount('#app');
+    </script>
+  </body>
+</html>

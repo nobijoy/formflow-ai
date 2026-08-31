@@ -10,7 +10,7 @@
 
 import type { TargetLocator } from '@/shared/schema/action-ledger';
 
-function resolveAccessibleLabel(element: HTMLElement): string | undefined {
+export function getAccessibleLabel(element: HTMLElement): string | undefined {
   const ariaLabel = element.getAttribute('aria-label');
   if (ariaLabel) return ariaLabel;
 
@@ -49,7 +49,7 @@ function resolveCssSelector(element: HTMLElement): string {
 export function resolveLocator(element: HTMLElement): TargetLocator {
   return {
     role: element.getAttribute('role') ?? inferImplicitRole(element),
-    label: resolveAccessibleLabel(element),
+    label: getAccessibleLabel(element),
     testId: element.getAttribute('data-testid') ?? undefined,
     css: resolveCssSelector(element),
   };

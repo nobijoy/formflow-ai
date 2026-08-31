@@ -15,17 +15,21 @@ export interface FieldContext {
 }
 
 const HEURISTICS: Array<{ pattern: RegExp; generate: () => string }> = [
-  { pattern: /e-?mail/i, generate: () => 'qa.tester@example.com' },
-  { pattern: /first\s?name/i, generate: () => 'Ada' },
-  { pattern: /last\s?name/i, generate: () => 'Lovelace' },
-  { pattern: /full\s?name|^name$/i, generate: () => 'Ada Lovelace' },
+  { pattern: /e[\s-]?mail/i, generate: () => 'qa.tester@example.com' },
+  { pattern: /first[\s_-]?name|given[\s_-]?name/i, generate: () => 'Ada' },
+  { pattern: /last[\s_-]?name|surname|family[\s_-]?name/i, generate: () => 'Lovelace' },
+  { pattern: /full[\s_-]?name|^name$/i, generate: () => 'Ada Lovelace' },
   { pattern: /phone|mobile|tel/i, generate: () => '+1-555-0100' },
   { pattern: /zip|postal/i, generate: () => '94105' },
-  { pattern: /city/i, generate: () => 'San Francisco' },
-  { pattern: /address/i, generate: () => '1 Market Street' },
-  { pattern: /company|organi[sz]ation/i, generate: () => 'Acme Corp' },
-  { pattern: /password/i, generate: () => 'Correct-Horse-Battery-9' },
-  { pattern: /url|website/i, generate: () => 'https://example.com' },
+  { pattern: /city|town/i, generate: () => 'San Francisco' },
+  { pattern: /street|address|addr/i, generate: () => '1 Market Street' },
+  { pattern: /company|organi[sz]ation|employer/i, generate: () => 'Acme Corp' },
+  { pattern: /password|passwd/i, generate: () => 'Correct-Horse-Battery-9' },
+  { pattern: /url|website|homepage/i, generate: () => 'https://example.com' },
+  { pattern: /username|user[\s_-]?id|login/i, generate: () => 'qa_tester_01' },
+  { pattern: /country/i, generate: () => 'United States' },
+  { pattern: /state|province|region/i, generate: () => 'California' },
+  { pattern: /birth|dob|date[\s_-]?of[\s_-]?birth/i, generate: () => '1990-01-15' },
 ];
 
 /**

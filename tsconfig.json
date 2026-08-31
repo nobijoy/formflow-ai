@@ -21,5 +21,5 @@
     },
     "types": ["chrome", "vite/client"]
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }

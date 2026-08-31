@@ -20,3 +20,14 @@ column, not a realistic app. Run every phase's exit criteria (see
 `docs/roadmap.md`) against this same matrix before shipping that phase, and
 re-run *previous* phases' criteria too (regression re-check, not just
 new-feature check).
+
+## Local testing
+
+Content scripts only run on `http(s)://` pages — not `file://`. Serve fixtures with:
+
+```bash
+npm run fixtures
+```
+
+Then open e.g. `http://localhost:3333/react-controlled/`, load the unpacked
+extension from `dist/`, and click **Fill Form** in the popup.

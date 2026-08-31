@@ -1,41 +1,72 @@
 /**
- * Module 3 — FR-3.3 BYOK (Free tier).
+ * Module 3 — FR-3.3 BYOK orchestration (Gemini, Groq, Ollama).
  *
- * User-supplied keys for Gemini, Groq, or local Ollama. Keys are AES-256
- * encrypted before being written to chrome.storage.local — see
- * docs/03-ai-inference-and-routing.md Open Question #3 for the documented
- * threat model this protects against (casual local inspection, not a fully
- * compromised device).
+ * Threat model: see key-storage.ts — casual storage inspection only.
  */
 
-export type ByokProvider = 'gemini' | 'groq' | 'ollama';
+import type { ByokProvider } from '@/shared/types/byok';
+import {
+  DEFAULT_OLLAMA_ENDPOINT,
+} from '@/shared/constants/byok-storage';
+import { decryptApiKey, loadByokSettings } from '@/background/ai-router/settings';
+import { callGemini } from '@/background/ai-router/providers/gemini';
+import { callGroq } from '@/background/ai-router/providers/groq';
+import { callOllama } from '@/background/ai-router/providers/ollama';
+import { AiRouterError } from '@/background/ai-router/errors';
 
-export interface ByokConfig {
-  provider: ByokProvider;
-  /** Ciphertext only — never hold a decrypted key in memory longer than one call. */
-  encryptedApiKey: string;
-  /** Required for 'ollama'; defaults to http://localhost:11434 */
-  endpoint?: string;
-}
+export type { ByokProvider };
 
 export interface AiInferenceRequest {
-  /** Sanitized DOM snippet only — see sanitizePayload in payload-sanitizer.ts. PII must already be stripped. */
+  /** Sanitized DOM snippet — PII must already be stripped (FR-3.2). */
   prompt: string;
 }
 
 export interface AiInferenceResult {
   suggestedValue: string;
   latencyMs: number;
+  provider: ByokProvider;
 }
 
-/**
- * Placeholder — Phase 2 implements the real per-provider request/response
- * mapping and the invalid-key / timeout / provider-outage failure paths
- * called out in the Phase 2 exit criteria (PROJECT.md Section 10).
- */
-export async function callByokProvider(
-  _config: ByokConfig,
-  _request: AiInferenceRequest,
-): Promise<AiInferenceResult> {
-  throw new Error('Not implemented: see docs/03-ai-inference-and-routing.md Phase 2 checklist');
+export async function callByokProvider(request: AiInferenceRequest): Promise<AiInferenceResult> {
+  const settings = await loadByokSettings();
+  if (!settings) {
+    throw new AiRouterError('NO_BYOK', 'BYOK is not configured. Add a provider in Settings.');
+  }
+
+  const start = performance.now();
+  let suggestedValue: string;
+  const provider = settings.provider;
+
+  switch (settings.provider) {
+    case 'gemini': {
+      const apiKey = await decryptApiKey(settings);
+      suggestedValue = await callGemini(apiKey, request.prompt);
+      break;
+    }
+    case 'groq': {
+      const apiKey = await decryptApiKey(settings);
+      suggestedValue = await callGroq(apiKey, request.prompt);
+      break;
+    }
+    case 'ollama': {
+      const endpoint = settings.endpoint ?? DEFAULT_OLLAMA_ENDPOINT;
+      suggestedValue = await callOllama(endpoint, request.prompt);
+      break;
+    }
+    default:
+      throw new AiRouterError('BAD_RESPONSE', 'Unknown BYOK provider.');
+  }
+
+  return {
+    suggestedValue,
+    latencyMs: Math.round(performance.now() - start),
+    provider,
+  };
+}
+
+/** Lightweight connectivity check used by the options page. */
+export async function testByokConnection(): Promise<AiInferenceResult> {
+  return callByokProvider({
+    prompt: 'tag=input type=text label="Favorite color"',
+  });
 }

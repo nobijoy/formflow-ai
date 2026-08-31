@@ -36,8 +36,13 @@ export default defineManifest({
       all_frames: false,
     },
   ],
-  permissions: ['storage', 'scripting', 'activeTab'],
-  host_permissions: [],
+  permissions: ['storage', 'scripting', 'activeTab', 'tabs'],
+  host_permissions: [
+    'https://generativelanguage.googleapis.com/*',
+    'https://api.groq.com/*',
+    'http://127.0.0.1:11434/*',
+    'http://localhost:11434/*',
+  ],
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
   },
