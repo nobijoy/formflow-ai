@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fixture — Closed Shadow DOM</title>
+  </head>
+  <body>
+    <!--
+      Expected result: FormFlow AI cannot reach the input inside this
+      component (element.shadowRoot is null for closed mode, by design).
+      Acceptance criterion (FR-1.3): a visible "not reachable" indicator is
+      shown for this host element instead of a silent skip.
+    -->
+    <custom-input-closed></custom-input-closed>
+    <script>
+      class CustomInputClosed extends HTMLElement {
+        constructor() {
+          super();
+          const shadow = this.attachShadow({ mode: 'closed' });
+          shadow.innerHTML = '<label>Custom Field</label><input data-testid="custom-closed-input" />';
+        }
+      }
+      customElements.define('custom-input-closed', CustomInputClosed);
+    </script>
+  </body>
+</html>

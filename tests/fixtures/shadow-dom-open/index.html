@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fixture — Open Shadow DOM</title>
+  </head>
+  <body>
+    <custom-input-open></custom-input-open>
+    <script>
+      class CustomInputOpen extends HTMLElement {
+        constructor() {
+          super();
+          const shadow = this.attachShadow({ mode: 'open' });
+          shadow.innerHTML = '<label>Custom Field</label><input data-testid="custom-open-input" />';
+        }
+      }
+      customElements.define('custom-input-open', CustomInputOpen);
+    </script>
+  </body>
+</html>
