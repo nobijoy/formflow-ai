@@ -3,6 +3,7 @@
  */
 
 import { generateHappyPathValue } from '@/data-generators/happy-path';
+import { loadFillHeuristics } from '@/content/fill-heuristics';
 import { resolvePresetValue } from '@/data-generators/preset-resolver';
 import { runFillPassAsync } from '@/content/dom-inspector';
 import { recordFillEntries } from '@/content/recorder';
@@ -44,6 +45,9 @@ export async function fillFormWithPreset(presetMode: PresetMode): Promise<Inspec
   let aiResolvedCount = 0;
   let fieldIndex = 0;
 
+  const hostname = window.location.hostname;
+  const packHeuristics = await loadFillHeuristics(hostname);
+
   const report = await runFillPassAsync(async (el) => {
     if (!isFillableInput(el)) return null;
 
@@ -60,7 +64,7 @@ export async function fillFormWithPreset(presetMode: PresetMode): Promise<Inspec
       return { value: presetValue, presetMode };
     }
 
-    const heuristic = generateHappyPathValue(context);
+    const heuristic = generateHappyPathValue(context, packHeuristics);
     if (heuristic) {
       heuristicResolvedCount += 1;
       return { value: heuristic, presetMode: 'HAPPY_PATH' };

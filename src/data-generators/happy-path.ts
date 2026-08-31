@@ -15,7 +15,12 @@ export interface FieldContext {
   required?: boolean;
 }
 
-const HEURISTICS: Array<{ pattern: RegExp; generate: () => string }> = [
+export interface RuntimeHeuristic {
+  pattern: RegExp;
+  generate: () => string;
+}
+
+const BASE_HEURISTICS: RuntimeHeuristic[] = [
   { pattern: /e[\s-]?mail/i, generate: () => 'qa.tester@example.com' },
   { pattern: /first[\s_-]?name|given[\s_-]?name/i, generate: () => 'Ada' },
   { pattern: /last[\s_-]?name|surname|family[\s_-]?name/i, generate: () => 'Lovelace' },
@@ -36,13 +41,18 @@ const HEURISTICS: Array<{ pattern: RegExp; generate: () => string }> = [
 /**
  * Returns a happy-path value for the field, or null if no heuristic matches
  * (caller should then try the AI resolver in Module 3 before giving up).
+ *
+ * Pack heuristics (FR-5.5) are checked before base heuristics when provided.
  */
-export function generateHappyPathValue(context: FieldContext): string | null {
+export function generateHappyPathValue(
+  context: FieldContext,
+  packHeuristics: RuntimeHeuristic[] = [],
+): string | null {
   const signal = [context.label, context.placeholder, context.name, context.type]
     .filter(Boolean)
     .join(' ');
 
-  for (const { pattern, generate } of HEURISTICS) {
+  for (const { pattern, generate } of [...packHeuristics, ...BASE_HEURISTICS]) {
     if (pattern.test(signal)) return generate();
   }
   return null;

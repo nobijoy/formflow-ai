@@ -4,6 +4,10 @@ import type { InspectionReport } from '@/shared/types/fill-report';
 import type { ByokProvider, InferenceProvider } from '@/shared/types/byok';
 import type { CompilerTarget, EntitlementSource, FeatureFlag, ManagedAiUsage, Tier } from '@/shared/types/entitlements';
 import type { SavedFlow } from '@/shared/types/saved-flows';
+import type { BugReportDestination, BugReportSettingsPublic } from '@/shared/types/bug-report';
+import type { DataPackId } from '@/shared/types/data-packs';
+import type { SharedSeedProfile } from '@/shared/types/data-packs';
+import type { TeamSharedFlow, TeamWorkspaceState, TeamWorkspaceSyncPayload } from '@/shared/types/team-workspace';
 
 export type RecordableAction = Omit<LedgerAction, 'step'>;
 
@@ -32,7 +36,37 @@ export type FormflowMessage =
   | { type: 'FORMFLOW_GET_MANAGED_AI_USAGE' }
   | { type: 'FORMFLOW_SAVE_FLOW'; name: string }
   | { type: 'FORMFLOW_LIST_SAVED_FLOWS' }
-  | { type: 'FORMFLOW_DELETE_SAVED_FLOW'; id: string };
+  | { type: 'FORMFLOW_DELETE_SAVED_FLOW'; id: string }
+  | { type: 'FORMFLOW_GET_BUG_REPORT_SETTINGS' }
+  | {
+      type: 'FORMFLOW_SAVE_BUG_REPORT_SETTINGS';
+      github?: { owner?: string; repo?: string; token?: string };
+      linear?: { teamId?: string; token?: string };
+      jira?: { baseUrl?: string; projectKey?: string; email?: string; token?: string };
+    }
+  | {
+      type: 'FORMFLOW_EXPORT_BUG_REPORT';
+      destination: BugReportDestination;
+      title: string;
+      extraNotes?: string;
+      stepLimit?: number;
+    }
+  | { type: 'FORMFLOW_GET_DATA_PACKS' }
+  | { type: 'FORMFLOW_ACTIVATE_DATA_PACK'; key: string }
+  | { type: 'FORMFLOW_SET_ACTIVE_DATA_PACKS'; packIds: DataPackId[] }
+  | { type: 'FORMFLOW_GET_TEAM_WORKSPACE' }
+  | { type: 'FORMFLOW_CREATE_TEAM_WORKSPACE'; name: string }
+  | { type: 'FORMFLOW_JOIN_TEAM_WORKSPACE'; inviteCode: string }
+  | { type: 'FORMFLOW_LEAVE_TEAM_WORKSPACE' }
+  | { type: 'FORMFLOW_SYNC_TEAM_WORKSPACE' }
+  | { type: 'FORMFLOW_PUBLISH_FLOW_TO_TEAM'; flowId: string }
+  | {
+      type: 'FORMFLOW_PUBLISH_SEED_PROFILE';
+      name: string;
+      domain: string;
+      packIds: DataPackId[];
+      overrides?: Record<string, string>;
+    };
 
 export interface FormflowPingResponse {
   ok: true;
@@ -79,6 +113,37 @@ export interface FormflowEntitlementResponse {
 export interface FormflowManagedAiUsageResponse {
   ok: true;
   usage: ManagedAiUsage;
+}
+
+export interface FormflowBugReportSettingsResponse {
+  ok: true;
+  settings: BugReportSettingsPublic;
+}
+
+export interface FormflowBugReportExportResponse {
+  ok: true;
+  issueUrl: string;
+  issueId: string;
+  destination: BugReportDestination;
+}
+
+export interface FormflowDataPacksResponse {
+  ok: true;
+  catalog: Array<{ id: DataPackId; name: string; description: string; priceLabel: string }>;
+  owned: DataPackId[];
+  active: DataPackId[];
+}
+
+export interface FormflowTeamWorkspaceResponse {
+  ok: true;
+  workspace: TeamWorkspaceState | null;
+}
+
+export interface FormflowTeamSyncResponse {
+  ok: true;
+  sync: TeamWorkspaceSyncPayload;
+  sharedFlows: TeamSharedFlow[];
+  seedProfiles: SharedSeedProfile[];
 }
 
 export interface FormflowSavedFlowResponse {
@@ -129,6 +194,11 @@ export type FormflowResponse =
   | FormflowManagedAiUsageResponse
   | FormflowSavedFlowResponse
   | FormflowSavedFlowsListResponse
+  | FormflowBugReportSettingsResponse
+  | FormflowBugReportExportResponse
+  | FormflowDataPacksResponse
+  | FormflowTeamWorkspaceResponse
+  | FormflowTeamSyncResponse
   | FormflowErrorResponse
   | { ok: true; startedAt: number }
   | { ok: true; authorized: true };
@@ -158,6 +228,19 @@ const MESSAGE_TYPES = new Set([
   'FORMFLOW_SAVE_FLOW',
   'FORMFLOW_LIST_SAVED_FLOWS',
   'FORMFLOW_DELETE_SAVED_FLOW',
+  'FORMFLOW_GET_BUG_REPORT_SETTINGS',
+  'FORMFLOW_SAVE_BUG_REPORT_SETTINGS',
+  'FORMFLOW_EXPORT_BUG_REPORT',
+  'FORMFLOW_GET_DATA_PACKS',
+  'FORMFLOW_ACTIVATE_DATA_PACK',
+  'FORMFLOW_SET_ACTIVE_DATA_PACKS',
+  'FORMFLOW_GET_TEAM_WORKSPACE',
+  'FORMFLOW_CREATE_TEAM_WORKSPACE',
+  'FORMFLOW_JOIN_TEAM_WORKSPACE',
+  'FORMFLOW_LEAVE_TEAM_WORKSPACE',
+  'FORMFLOW_SYNC_TEAM_WORKSPACE',
+  'FORMFLOW_PUBLISH_FLOW_TO_TEAM',
+  'FORMFLOW_PUBLISH_SEED_PROFILE',
 ]);
 
 export function isFormflowMessage(value: unknown): value is FormflowMessage {

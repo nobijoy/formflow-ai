@@ -40,8 +40,32 @@ import {
   deleteSavedFlow,
   listSavedFlows,
   saveFlow,
+  getSavedFlow,
   isSavedFlowError,
 } from '@/background/saved-flows';
+import {
+  exportBugReport,
+  getBugReportSettingsPublic,
+  saveBugReportSettings,
+  isBugReportError,
+} from '@/background/bug-report';
+import {
+  activateDataPackKey,
+  getActiveDataPacks,
+  getOwnedDataPacks,
+  listDataPackCatalog,
+  setActiveDataPacks,
+} from '@/background/data-packs';
+import {
+  createTeamWorkspace,
+  getTeamWorkspace,
+  joinTeamWorkspace,
+  leaveTeamWorkspace,
+  publishFlowToTeam,
+  publishSeedProfile,
+  syncTeamWorkspace,
+  isTeamWorkspaceError,
+} from '@/background/team-workspace';
 
 const SW_STATUS_KEY = 'formflow.serviceWorker.startedAt';
 
@@ -70,6 +94,12 @@ function errorResponse(err: unknown): FormflowErrorResponse {
     return { ok: false, error: err.message, code: err.code };
   }
   if (isSavedFlowError(err)) {
+    return { ok: false, error: err.message, code: err.code };
+  }
+  if (isBugReportError(err)) {
+    return { ok: false, error: err.message, code: err.code };
+  }
+  if (isTeamWorkspaceError(err)) {
     return { ok: false, error: err.message, code: err.code };
   }
   return {
@@ -357,6 +387,163 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => getRecordingStatus())
       .then((status) => respond({ ok: true, ...status }))
       .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_BUG_REPORT_SETTINGS') {
+    void getBugReportSettingsPublic()
+      .then((settings) => respond({ ok: true, settings }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_SAVE_BUG_REPORT_SETTINGS') {
+    void saveBugReportSettings({
+      github: message.github,
+      linear: message.linear,
+      jira: message.jira,
+    })
+      .then((settings) => respond({ ok: true, settings }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_EXPORT_BUG_REPORT') {
+    void (async () => {
+      const ledger = await getCompilableLedger();
+      if (!ledger) throw new Error('Record a flow first — nothing to export.');
+      const result = await exportBugReport({
+        destination: message.destination,
+        title: message.title,
+        ledger,
+        stepLimit: message.stepLimit,
+        extraNotes: message.extraNotes,
+      });
+      respond({
+        ok: true,
+        issueUrl: result.issueUrl,
+        issueId: result.issueId,
+        destination: result.destination,
+      });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_DATA_PACKS') {
+    void (async () => {
+      respond({
+        ok: true,
+        catalog: listDataPackCatalog(),
+        owned: await getOwnedDataPacks(),
+        active: await getActiveDataPacks(),
+      });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_ACTIVATE_DATA_PACK') {
+    void activateDataPackKey(message.key)
+      .then(async (owned) => {
+        respond({
+          ok: true,
+          catalog: listDataPackCatalog(),
+          owned,
+          active: await getActiveDataPacks(),
+        });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_SET_ACTIVE_DATA_PACKS') {
+    void setActiveDataPacks(message.packIds)
+      .then(async (active) => {
+        respond({
+          ok: true,
+          catalog: listDataPackCatalog(),
+          owned: await getOwnedDataPacks(),
+          active,
+        });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_TEAM_WORKSPACE') {
+    void getTeamWorkspace()
+      .then((workspace) => respond({ ok: true, workspace }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_CREATE_TEAM_WORKSPACE') {
+    void createTeamWorkspace(message.name)
+      .then((workspace) => respond({ ok: true, workspace }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_JOIN_TEAM_WORKSPACE') {
+    void joinTeamWorkspace(message.inviteCode)
+      .then((workspace) => respond({ ok: true, workspace }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_LEAVE_TEAM_WORKSPACE') {
+    void leaveTeamWorkspace()
+      .then(() => respond({ ok: true, workspace: null }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_SYNC_TEAM_WORKSPACE') {
+    void (async () => {
+      const sync = await syncTeamWorkspace();
+      respond({
+        ok: true,
+        sync,
+        sharedFlows: sync.sharedFlows,
+        seedProfiles: sync.seedProfiles,
+      });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_PUBLISH_FLOW_TO_TEAM') {
+    void (async () => {
+      const flow = await getSavedFlow(message.flowId);
+      if (!flow) throw new Error('Saved flow not found.');
+      await publishFlowToTeam(flow);
+      const sync = await syncTeamWorkspace();
+      respond({
+        ok: true,
+        sync,
+        sharedFlows: sync.sharedFlows,
+        seedProfiles: sync.seedProfiles,
+      });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_PUBLISH_SEED_PROFILE') {
+    void (async () => {
+      await publishSeedProfile({
+        id: `seed_${Date.now()}`,
+        name: message.name,
+        domain: message.domain,
+        packIds: message.packIds,
+        overrides: message.overrides ?? {},
+        updatedAt: Date.now(),
+      });
+      const sync = await syncTeamWorkspace();
+      respond({
+        ok: true,
+        sync,
+        sharedFlows: sync.sharedFlows,
+        seedProfiles: sync.seedProfiles,
+      });
+    })().catch((err) => respond(errorResponse(err)));
     return true;
   }
 

@@ -12,6 +12,7 @@ import type { EntitlementSource, Tier } from '@/shared/types/entitlements';
 import type { SavedFlow } from '@/shared/types/saved-flows';
 import { CHECKOUT_URL, DEV_LICENSE_KEYS } from '@/shared/constants/licensing';
 import { DEFAULT_OLLAMA_ENDPOINT } from '@/shared/constants/byok-storage';
+import { Phase6Settings } from '@/options/Phase6Settings';
 
 type Settings = FormflowByokSettingsResponse['settings'];
 
@@ -165,10 +166,11 @@ export function App() {
       type: 'FORMFLOW_GET_BYOK_SETTINGS',
     })) as FormflowResponse;
 
-    if (response.ok && 'settings' in response) {
-      setSettings(response.settings);
-      setProvider(response.settings.provider);
-      if (response.settings.endpoint) setEndpoint(response.settings.endpoint);
+    if (response.ok && 'settings' in response && 'provider' in (response as FormflowByokSettingsResponse).settings) {
+      const byok = response as FormflowByokSettingsResponse;
+      setSettings(byok.settings);
+      setProvider(byok.settings.provider);
+      if (byok.settings.endpoint) setEndpoint(byok.settings.endpoint);
     }
   }
 
@@ -184,8 +186,8 @@ export function App() {
       })) as FormflowResponse;
 
       if (!response.ok) throw new Error('error' in response ? response.error : 'Save failed.');
-      if ('settings' in response) {
-        setSettings(response.settings);
+      if ('settings' in response && 'provider' in (response as FormflowByokSettingsResponse).settings) {
+        setSettings((response as FormflowByokSettingsResponse).settings);
         setApiKey('');
         setStatus('Settings saved.');
       }
@@ -371,18 +373,43 @@ export function App() {
                 <span>
                   {flow.name} <span className="text-slate-400">({flow.domain})</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteFlow(flow.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
+                <div className="flex gap-2">
+                  {tier === 'TEAM' && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await chrome.runtime.sendMessage({
+                          type: 'FORMFLOW_PUBLISH_FLOW_TO_TEAM',
+                          flowId: flow.id,
+                        });
+                        setStatus(`Published “${flow.name}” to team workspace.`);
+                      }}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      Share
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteFlow(flow.id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </section>
       )}
+
+      <Phase6Settings
+        tier={tier}
+        source={source}
+        onStatus={setStatus}
+        loading={loading}
+        setLoading={setLoading}
+      />
 
       {status && (
         <p className="mb-4 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">

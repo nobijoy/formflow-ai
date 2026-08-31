@@ -97,6 +97,9 @@ export function App() {
   const [stepCount, setStepCount] = useState(0);
   const [lastLedger, setLastLedger] = useState<ActionLedger | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [bugTitle, setBugTitle] = useState('');
+  const [bugDestination, setBugDestination] = useState<'github' | 'linear' | 'jira'>('github');
+  const [bugMessage, setBugMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
 
@@ -220,6 +223,25 @@ export function App() {
       return;
     }
     setSaveMessage(`Saved “${response.flow.name}”.`);
+  };
+
+  const handleExportBugReport = async () => {
+    setBugMessage(null);
+    if (!features.includes('BUG_REPORT_GENERATOR')) {
+      setBugMessage('Bug reports require Pro. Activate a license in Settings.');
+      return;
+    }
+    const response = (await chrome.runtime.sendMessage({
+      type: 'FORMFLOW_EXPORT_BUG_REPORT',
+      destination: bugDestination,
+      title: bugTitle.trim() || 'Form bug report',
+    })) as FormflowResponse;
+    if (!response.ok || !('issueUrl' in response)) {
+      setBugMessage('error' in response ? response.error : 'Export failed.');
+      return;
+    }
+    setBugMessage(`Issue created: ${response.issueUrl}`);
+    await chrome.tabs.create({ url: response.issueUrl });
   };
 
   const handleCopyCode = async () => {
@@ -374,6 +396,34 @@ export function App() {
           Copy Code
         </button>
         {copyMessage && <p className="mt-1.5 text-[11px] text-slate-600">{copyMessage}</p>}
+      </section>
+
+      <section className="mb-3 rounded border border-slate-200 p-2">
+        <div className="mb-1 text-xs font-medium">Bug report (Pro)</div>
+        <input
+          type="text"
+          value={bugTitle}
+          onChange={(e) => setBugTitle(e.target.value)}
+          placeholder="Issue title"
+          className="mb-1.5 w-full rounded border border-slate-300 px-2 py-1 text-[11px]"
+        />
+        <select
+          value={bugDestination}
+          onChange={(e) => setBugDestination(e.target.value as 'github' | 'linear' | 'jira')}
+          className="mb-1.5 w-full rounded border border-slate-300 px-2 py-1 text-[11px]"
+        >
+          <option value="github">GitHub Issues</option>
+          <option value="linear">Linear</option>
+          <option value="jira">Jira</option>
+        </select>
+        <button
+          type="button"
+          onClick={handleExportBugReport}
+          className="w-full rounded border border-amber-300 bg-amber-50 py-1.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+        >
+          Export bug report
+        </button>
+        {bugMessage && <p className="mt-1 text-[11px] text-slate-600">{bugMessage}</p>}
       </section>
 
       {status.kind === 'success' && (

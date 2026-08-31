@@ -9,6 +9,7 @@ export const LICENSE_VERIFY_URL = 'https://api.formflow.ai/v1/license/verify';
 
 /** Opens in a new tab; low-permission checkout flow (FR-5.2). */
 export const CHECKOUT_URL = 'https://formflow.ai/checkout';
+export const FOUNDING_LIFETIME_CHECKOUT_URL = 'https://formflow.ai/founding-lifetime';
 
 /** Pro tier managed-AI monthly quota (client-side backup; server enforces NFR-7). */
 export const MANAGED_AI_MONTHLY_QUOTA = 500;
