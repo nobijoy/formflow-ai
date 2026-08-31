@@ -4,7 +4,7 @@
  * Threat model: see key-storage.ts — casual storage inspection only.
  */
 
-import type { ByokProvider } from '@/shared/types/byok';
+import type { ByokProvider, InferenceProvider } from '@/shared/types/byok';
 import {
   DEFAULT_OLLAMA_ENDPOINT,
 } from '@/shared/constants/byok-storage';
@@ -14,7 +14,7 @@ import { callGroq } from '@/background/ai-router/providers/groq';
 import { callOllama } from '@/background/ai-router/providers/ollama';
 import { AiRouterError } from '@/background/ai-router/errors';
 
-export type { ByokProvider };
+export type { ByokProvider, InferenceProvider };
 
 export interface AiInferenceRequest {
   /** Sanitized DOM snippet — PII must already be stripped (FR-3.2). */
@@ -24,7 +24,7 @@ export interface AiInferenceRequest {
 export interface AiInferenceResult {
   suggestedValue: string;
   latencyMs: number;
-  provider: ByokProvider;
+  provider: InferenceProvider;
 }
 
 export async function callByokProvider(request: AiInferenceRequest): Promise<AiInferenceResult> {

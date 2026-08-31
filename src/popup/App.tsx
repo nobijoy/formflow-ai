@@ -96,7 +96,9 @@ export function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [stepCount, setStepCount] = useState(0);
   const [lastLedger, setLastLedger] = useState<ActionLedger | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [flowName, setFlowName] = useState('');
 
   const refreshRecording = useCallback(async () => {
     try {
@@ -184,6 +186,7 @@ export function App() {
       setLastLedger(stopped.ledger);
       setIsRecording(false);
       setStepCount(stopped.ledger.actions.length);
+      setFlowName(`Flow ${new Date().toLocaleDateString()}`);
       return;
     }
 
@@ -200,6 +203,23 @@ export function App() {
     setIsRecording(true);
     setStepCount((response as FormflowRecordingStatusResponse).stepCount);
     setLastLedger(null);
+  };
+
+  const handleSaveFlow = async () => {
+    setSaveMessage(null);
+    if (!lastLedger) {
+      setSaveMessage('Record a flow first.');
+      return;
+    }
+    const response = (await chrome.runtime.sendMessage({
+      type: 'FORMFLOW_SAVE_FLOW',
+      name: flowName.trim() || 'Untitled flow',
+    })) as FormflowResponse;
+    if (!response.ok || !('flow' in response)) {
+      setSaveMessage('error' in response ? response.error : 'Save failed.');
+      return;
+    }
+    setSaveMessage(`Saved “${response.flow.name}”.`);
   };
 
   const handleCopyCode = async () => {
@@ -307,9 +327,28 @@ export function App() {
           {isRecording ? 'Stop Recording' : 'Start Recording'}
         </button>
         {lastLedger && !isRecording && (
-          <p className="mt-1.5 text-[11px] text-slate-500">
-            Last flow: {lastLedger.actions.length} actions recorded.
-          </p>
+          <>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Last flow: {lastLedger.actions.length} actions recorded.
+            </p>
+            <div className="mt-2 flex gap-1">
+              <input
+                type="text"
+                value={flowName}
+                onChange={(e) => setFlowName(e.target.value)}
+                placeholder="Flow name"
+                className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-[11px]"
+              />
+              <button
+                type="button"
+                onClick={handleSaveFlow}
+                className="shrink-0 rounded border border-slate-300 px-2 py-1 text-[11px] font-medium hover:bg-slate-50"
+              >
+                Save
+              </button>
+            </div>
+            {saveMessage && <p className="mt-1 text-[11px] text-slate-600">{saveMessage}</p>}
+          </>
         )}
       </section>
 
@@ -351,7 +390,7 @@ export function App() {
       )}
 
       <p className="text-[11px] text-slate-500">
-        Phase 4: record → copy Playwright/Cypress.{' '}
+        Record → save → copy Playwright/Cypress.{' '}
         <button
           type="button"
           className="text-indigo-600 underline"

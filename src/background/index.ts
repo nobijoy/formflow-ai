@@ -17,8 +17,14 @@ import { assertFillAllowed, isFillGateError } from '@/background/fill-gate';
 import { authorizeSecurityDomain } from '@/background/security/domain-authorization';
 import {
   getCachedEntitlement,
+  derivedFeatures,
+  isWithinGracePeriod,
   setDevProTier,
+  activateLicenseKey,
+  deactivateLicense,
+  verifyEntitlementRemote,
 } from '@/background/licensing/index';
+import { getManagedAiUsage } from '@/background/ai-router/managed-quota';
 import {
   getCompilableLedger,
   getRecordingStatus,
@@ -29,6 +35,13 @@ import {
 } from '@/background/ledger/recording-manager';
 import { compileLedger } from '@/background/compiler';
 import { assertCompilerAllowed, isCompilerGateError } from '@/background/compiler-gate';
+import { assertMultiStepAllowed, isRecordingGateError } from '@/background/recording-gate';
+import {
+  deleteSavedFlow,
+  listSavedFlows,
+  saveFlow,
+  isSavedFlowError,
+} from '@/background/saved-flows';
 
 const SW_STATUS_KEY = 'formflow.serviceWorker.startedAt';
 
@@ -51,6 +64,12 @@ function errorResponse(err: unknown): FormflowErrorResponse {
     return { ok: false, error: err.message, code: err.code, hostname: err.hostname };
   }
   if (isCompilerGateError(err)) {
+    return { ok: false, error: err.message, code: err.code };
+  }
+  if (isRecordingGateError(err)) {
+    return { ok: false, error: err.message, code: err.code };
+  }
+  if (isSavedFlowError(err)) {
     return { ok: false, error: err.message, code: err.code };
   }
   return {
@@ -109,16 +128,79 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'FORMFLOW_GET_ENTITLEMENT') {
     void getCachedEntitlement().then((state) => {
-      respond({ ok: true, tier: state.tier, features: state.features });
+      respond({
+        ok: true,
+        tier: state.tier,
+        features: derivedFeatures(state),
+        source: state.source,
+        withinGrace: isWithinGracePeriod(state),
+      });
     });
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_VERIFY_ENTITLEMENT') {
+    void verifyEntitlementRemote()
+      .then((state) => {
+        respond({
+          ok: true,
+          tier: state.tier,
+          features: derivedFeatures(state),
+          source: state.source,
+          withinGrace: isWithinGracePeriod(state),
+        });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_ACTIVATE_LICENSE') {
+    void activateLicenseKey(message.licenseKey)
+      .then((state) => {
+        respond({
+          ok: true,
+          tier: state.tier,
+          features: derivedFeatures(state),
+          source: state.source,
+          withinGrace: isWithinGracePeriod(state),
+        });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_DEACTIVATE_LICENSE') {
+    void deactivateLicense()
+      .then((state) => {
+        respond({
+          ok: true,
+          tier: state.tier,
+          features: derivedFeatures(state),
+          source: state.source,
+          withinGrace: isWithinGracePeriod(state),
+        });
+      })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_MANAGED_AI_USAGE') {
+    void getManagedAiUsage()
+      .then((usage) => respond({ ok: true, usage }))
+      .catch((err) => respond(errorResponse(err)));
     return true;
   }
 
   if (message.type === 'FORMFLOW_SET_DEV_PRO_TIER') {
     void setDevProTier(message.enabled)
-      .then(async () => {
-        const state = await getCachedEntitlement();
-        respond({ ok: true, tier: state.tier, features: state.features });
+      .then((state) => {
+        respond({
+          ok: true,
+          tier: state.tier,
+          features: derivedFeatures(state),
+          source: state.source,
+          withinGrace: isWithinGracePeriod(state),
+        });
       })
       .catch((err) => respond(errorResponse(err)));
     return true;
@@ -161,6 +243,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await sendToTab(status.tabId, { type: 'FORMFLOW_RECORDING_CONTROL', active: false });
       }
       if (!ledger) throw new Error('No recording to stop.');
+      await assertMultiStepAllowed(ledger);
       respond({ ok: true, ledger });
     })().catch((err) => respond(errorResponse(err)));
     return true;
@@ -193,6 +276,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!ledger || ledger.actions.length === 0) {
         throw new Error('Record a flow first — the action ledger is empty.');
       }
+      await assertMultiStepAllowed(ledger);
       const code = compileLedger(ledger, message.target);
       respond({ ok: true, code, target: message.target });
     })().catch((err) => respond(errorResponse(err)));
@@ -244,6 +328,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           provider: result.provider,
         });
       })
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_SAVE_FLOW') {
+    void (async () => {
+      const ledger = await getCompilableLedger();
+      if (!ledger || ledger.actions.length === 0) {
+        throw new Error('Record a flow first — nothing to save.');
+      }
+      await assertMultiStepAllowed(ledger);
+      const flow = await saveFlow(message.name, ledger);
+      respond({ ok: true, flow });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_LIST_SAVED_FLOWS') {
+    void listSavedFlows()
+      .then((flows) => respond({ ok: true, flows }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_DELETE_SAVED_FLOW') {
+    void deleteSavedFlow(message.id)
+      .then(() => getRecordingStatus())
+      .then((status) => respond({ ok: true, ...status }))
       .catch((err) => respond(errorResponse(err)));
     return true;
   }

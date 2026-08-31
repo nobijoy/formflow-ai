@@ -41,7 +41,7 @@ export async function assertFillAllowed(presetMode: PresetMode): Promise<void> {
   if (feature && !(await hasFeature(feature))) {
     throw new FillGateError(
       'PRO_REQUIRED',
-      'This preset requires FormFlow Pro. Enable “Simulate Pro” in Settings (dev) or upgrade when billing ships in Phase 5.',
+      'This preset requires FormFlow Pro. Activate a license in Settings or enable “Simulate Pro” for dev testing.',
     );
   }
 

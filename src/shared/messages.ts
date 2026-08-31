@@ -1,8 +1,9 @@
 import type { PresetMode, LedgerAction } from '@/shared/schema/action-ledger';
 import type { ActionLedger } from '@/shared/schema/action-ledger';
 import type { InspectionReport } from '@/shared/types/fill-report';
-import type { ByokProvider } from '@/shared/types/byok';
-import type { CompilerTarget, FeatureFlag, Tier } from '@/shared/types/entitlements';
+import type { ByokProvider, InferenceProvider } from '@/shared/types/byok';
+import type { CompilerTarget, EntitlementSource, FeatureFlag, ManagedAiUsage, Tier } from '@/shared/types/entitlements';
+import type { SavedFlow } from '@/shared/types/saved-flows';
 
 export type RecordableAction = Omit<LedgerAction, 'step'>;
 
@@ -24,7 +25,14 @@ export type FormflowMessage =
   | { type: 'FORMFLOW_RECORD_ACTION'; action: RecordableAction }
   | { type: 'FORMFLOW_CONTENT_READY'; url: string }
   | { type: 'FORMFLOW_RECORDING_CONTROL'; active: boolean }
-  | { type: 'FORMFLOW_COMPILE_LEDGER'; target: CompilerTarget };
+  | { type: 'FORMFLOW_COMPILE_LEDGER'; target: CompilerTarget }
+  | { type: 'FORMFLOW_ACTIVATE_LICENSE'; licenseKey: string }
+  | { type: 'FORMFLOW_VERIFY_ENTITLEMENT' }
+  | { type: 'FORMFLOW_DEACTIVATE_LICENSE' }
+  | { type: 'FORMFLOW_GET_MANAGED_AI_USAGE' }
+  | { type: 'FORMFLOW_SAVE_FLOW'; name: string }
+  | { type: 'FORMFLOW_LIST_SAVED_FLOWS' }
+  | { type: 'FORMFLOW_DELETE_SAVED_FLOW'; id: string };
 
 export interface FormflowPingResponse {
   ok: true;
@@ -40,7 +48,7 @@ export interface FormflowResolveFieldResponse {
   ok: true;
   value: string;
   latencyMs: number;
-  provider: ByokProvider;
+  provider: InferenceProvider;
 }
 
 export interface FormflowByokSettingsResponse {
@@ -57,13 +65,30 @@ export interface FormflowByokTestResponse {
   ok: true;
   value: string;
   latencyMs: number;
-  provider: ByokProvider;
+  provider: InferenceProvider;
 }
 
 export interface FormflowEntitlementResponse {
   ok: true;
   tier: Tier;
   features: FeatureFlag[];
+  source: EntitlementSource;
+  withinGrace: boolean;
+}
+
+export interface FormflowManagedAiUsageResponse {
+  ok: true;
+  usage: ManagedAiUsage;
+}
+
+export interface FormflowSavedFlowResponse {
+  ok: true;
+  flow: SavedFlow;
+}
+
+export interface FormflowSavedFlowsListResponse {
+  ok: true;
+  flows: SavedFlow[];
 }
 
 export interface FormflowRecordingStatusResponse {
@@ -101,6 +126,9 @@ export type FormflowResponse =
   | FormflowRecordingStatusResponse
   | FormflowRecordingStoppedResponse
   | FormflowCompileResponse
+  | FormflowManagedAiUsageResponse
+  | FormflowSavedFlowResponse
+  | FormflowSavedFlowsListResponse
   | FormflowErrorResponse
   | { ok: true; startedAt: number }
   | { ok: true; authorized: true };
@@ -123,6 +151,13 @@ const MESSAGE_TYPES = new Set([
   'FORMFLOW_CONTENT_READY',
   'FORMFLOW_RECORDING_CONTROL',
   'FORMFLOW_COMPILE_LEDGER',
+  'FORMFLOW_ACTIVATE_LICENSE',
+  'FORMFLOW_VERIFY_ENTITLEMENT',
+  'FORMFLOW_DEACTIVATE_LICENSE',
+  'FORMFLOW_GET_MANAGED_AI_USAGE',
+  'FORMFLOW_SAVE_FLOW',
+  'FORMFLOW_LIST_SAVED_FLOWS',
+  'FORMFLOW_DELETE_SAVED_FLOW',
 ]);
 
 export function isFormflowMessage(value: unknown): value is FormflowMessage {

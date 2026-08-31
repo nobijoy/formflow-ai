@@ -40,6 +40,7 @@ export default defineManifest({
   host_permissions: [
     'https://generativelanguage.googleapis.com/*',
     'https://api.groq.com/*',
+    'https://api.formflow.ai/*',
     'http://127.0.0.1:11434/*',
     'http://localhost:11434/*',
   ],

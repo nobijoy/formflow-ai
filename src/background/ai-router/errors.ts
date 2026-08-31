@@ -6,6 +6,7 @@
 export type AiRouterErrorCode =
   | 'NO_BYOK'
   | 'INVALID_KEY'
+  | 'QUOTA_EXCEEDED'
   | 'TIMEOUT'
   | 'PROVIDER_OUTAGE'
   | 'NETWORK_ERROR'

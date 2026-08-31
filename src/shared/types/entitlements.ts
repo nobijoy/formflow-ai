@@ -21,14 +21,28 @@ export type FeatureFlag =
   | 'BUG_REPORT_GENERATOR'
   | 'TEAM_WORKSPACE';
 
+export type EntitlementSource =
+  | 'free'
+  | 'dev'
+  | 'subscription'
+  | 'founding_lifetime'
+  | 'team';
+
 /**
- * Entitlement cache shape (NFR-6). Must be checked locally first; a stale
- * cache within `gracePeriodMs` of `lastVerifiedAt` is treated as valid so a
- * billing-provider outage never hard-locks a paying user out.
+ * Entitlement cache shape (NFR-6). Features are derived from `tier` at runtime —
+ * never persisted or trusted from storage (FR-5.2 tamper resistance).
  */
 export interface EntitlementState {
   tier: Tier;
-  features: FeatureFlag[];
+  source: EntitlementSource;
   lastVerifiedAt: number;
   gracePeriodMs: number;
+  /** HMAC-signed payload; invalid signature → treat as FREE. */
+  integrity: string;
+}
+
+export interface ManagedAiUsage {
+  monthKey: string;
+  used: number;
+  quota: number;
 }
