@@ -1,10 +1,11 @@
 /**
- * Phase 3 fill orchestration — all four presets + Happy-Path AI fallback.
+ * Phase 3–4 fill orchestration — all presets + recording FILL actions.
  */
 
 import { generateHappyPathValue } from '@/data-generators/happy-path';
 import { resolvePresetValue } from '@/data-generators/preset-resolver';
 import { runFillPassAsync } from '@/content/dom-inspector';
+import { recordFillEntries } from '@/content/recorder';
 import type { InspectionReport } from '@/shared/types/fill-report';
 import {
   extractFieldContext,
@@ -59,7 +60,6 @@ export async function fillFormWithPreset(presetMode: PresetMode): Promise<Inspec
       return { value: presetValue, presetMode };
     }
 
-    // Happy-Path: regex heuristics first, then BYOK AI, then generic fallback.
     const heuristic = generateHappyPathValue(context);
     if (heuristic) {
       heuristicResolvedCount += 1;
@@ -76,6 +76,8 @@ export async function fillFormWithPreset(presetMode: PresetMode): Promise<Inspec
     heuristicResolvedCount += 1;
     return { value: genericFallback(context), presetMode: 'HAPPY_PATH' };
   });
+
+  await recordFillEntries(report.filled);
 
   return { ...report, heuristicResolvedCount, aiResolvedCount };
 }

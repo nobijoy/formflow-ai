@@ -3,11 +3,29 @@
  */
 
 import { fillFormWithPreset } from '@/content/fill-handler';
-import { isFormflowMessage, type FormflowResponse } from '@/shared/messages';
+import {
+  isContentControlMessage,
+  isFormflowMessage,
+  type FormflowResponse,
+} from '@/shared/messages';
+import {
+  notifyContentReady,
+  patchSpaNavigation,
+  setRecordingActive,
+} from '@/content/recorder';
 
 console.debug('[FormFlow AI] content script loaded');
 
+patchSpaNavigation();
+void notifyContentReady();
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (isContentControlMessage(message)) {
+    setRecordingActive(message.active);
+    sendResponse({ ok: true, source: 'content-script' });
+    return;
+  }
+
   if (!isFormflowMessage(message)) return;
 
   const respond = (response: FormflowResponse) => {

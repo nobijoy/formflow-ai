@@ -36,3 +36,8 @@ export function endSession(sessionId: string): ActionLedger | undefined {
   sessions.delete(sessionId);
   return session;
 }
+
+/** Rehydrates an in-memory session from chrome.storage.session after SW restart. */
+export function restoreSession(ledger: ActionLedger): void {
+  sessions.set(ledger.sessionId, ledger);
+}

@@ -14,13 +14,21 @@ import {
 } from '@/background/ai-router/settings';
 import { isAiRouterError } from '@/background/ai-router/errors';
 import { assertFillAllowed, isFillGateError } from '@/background/fill-gate';
-import {
-  authorizeSecurityDomain,
-} from '@/background/security/domain-authorization';
+import { authorizeSecurityDomain } from '@/background/security/domain-authorization';
 import {
   getCachedEntitlement,
   setDevProTier,
 } from '@/background/licensing/index';
+import {
+  getCompilableLedger,
+  getRecordingStatus,
+  handleContentReady,
+  recordActionForActiveTab,
+  startRecording,
+  stopRecording,
+} from '@/background/ledger/recording-manager';
+import { compileLedger } from '@/background/compiler';
+import { assertCompilerAllowed, isCompilerGateError } from '@/background/compiler-gate';
 
 const SW_STATUS_KEY = 'formflow.serviceWorker.startedAt';
 
@@ -42,23 +50,30 @@ function errorResponse(err: unknown): FormflowErrorResponse {
   if (isFillGateError(err)) {
     return { ok: false, error: err.message, code: err.code, hostname: err.hostname };
   }
+  if (isCompilerGateError(err)) {
+    return { ok: false, error: err.message, code: err.code };
+  }
   return {
     ok: false,
     error: err instanceof Error ? err.message : 'Unexpected error.',
   };
 }
 
-async function getActiveTabId(): Promise<number> {
+async function getActiveTab(): Promise<chrome.tabs.Tab> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error('No active tab found.');
   if (!tab.url?.startsWith('http')) {
     throw new Error('FormFlow AI only works on http(s) pages. Open a web page and try again.');
   }
-  return tab.id;
+  return tab;
 }
 
-async function sendToActiveTab<T>(payload: unknown): Promise<T> {
-  const tabId = await getActiveTabId();
+async function getActiveTabId(): Promise<number> {
+  const tab = await getActiveTab();
+  return tab.id!;
+}
+
+async function sendToTab<T>(tabId: number, payload: unknown): Promise<T> {
   try {
     return await chrome.tabs.sendMessage(tabId, payload);
   } catch {
@@ -68,7 +83,12 @@ async function sendToActiveTab<T>(payload: unknown): Promise<T> {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+async function sendToActiveTab<T>(payload: unknown): Promise<T> {
+  const tabId = await getActiveTabId();
+  return sendToTab<T>(tabId, payload);
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!isFormflowMessage(message)) return;
 
   const respond = (response: FormflowResponse) => {
@@ -108,6 +128,74 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void authorizeSecurityDomain(message.hostname)
       .then(() => respond({ ok: true, authorized: true }))
       .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_GET_RECORDING_STATUS') {
+    void getRecordingStatus()
+      .then((status) => respond({ ok: true, ...status }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_START_RECORDING') {
+    void (async () => {
+      const tab = await getActiveTab();
+      const ledger = await startRecording(tab.id!, tab.url!);
+      await sendToTab(tab.id!, { type: 'FORMFLOW_RECORDING_CONTROL', active: true });
+      respond({
+        ok: true,
+        isRecording: true,
+        stepCount: ledger.actions.length,
+        sessionId: ledger.sessionId,
+      });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_STOP_RECORDING') {
+    void (async () => {
+      const status = await getRecordingStatus();
+      const ledger = await stopRecording();
+      if (status.tabId) {
+        await sendToTab(status.tabId, { type: 'FORMFLOW_RECORDING_CONTROL', active: false });
+      }
+      if (!ledger) throw new Error('No recording to stop.');
+      respond({ ok: true, ledger });
+    })().catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_RECORD_ACTION') {
+    const tabId = sender.tab?.id;
+    if (!tabId) {
+      respond({ ok: false, error: 'Missing tab context for recorded action.' });
+      return true;
+    }
+    void recordActionForActiveTab(tabId, message.action)
+      .then(() => getRecordingStatus())
+      .then((status) => respond({ ok: true, ...status }))
+      .catch((err) => respond(errorResponse(err)));
+    return true;
+  }
+
+  if (message.type === 'FORMFLOW_CONTENT_READY') {
+    const tabId = sender.tab?.id;
+    if (!tabId) return;
+    void handleContentReady(tabId, message.url).catch(() => undefined);
+    return;
+  }
+
+  if (message.type === 'FORMFLOW_COMPILE_LEDGER') {
+    void (async () => {
+      await assertCompilerAllowed(message.target);
+      const ledger = await getCompilableLedger();
+      if (!ledger || ledger.actions.length === 0) {
+        throw new Error('Record a flow first — the action ledger is empty.');
+      }
+      const code = compileLedger(ledger, message.target);
+      respond({ ok: true, code, target: message.target });
+    })().catch((err) => respond(errorResponse(err)));
     return true;
   }
 
